@@ -1,0 +1,23 @@
+exfunction 
+//T 秒後の軌跡を含んだ障害物 A を記す Boundingbox 集合
+未来つき障害物集合():setBB
+//動的な障害物が存在すれば、true
+動的な障害物がある():bool
+//自車線をBounding boxの集合として返す
+自車線():setBB
+endexfunction
+
+condition
+[動的な障害物がある ()]
+endcondition
+
+case 障害物Aが自車線に侵入する可能性が高い
+let 未来つき障害物集合:setBB = 未来つき障害物集合(),
+自車線:setBB = 自車線() in
+RAT( (自車線 ∩ 未来つき障害物集合) , 未来つき障害物集合 ) > 0.3
+endcase
+
+case 障害物Aが自車線に侵入する可能性が低い
+let 未来つき障害物集合:setBB = 未来つき障害物集合(), 自車線:setBB = 自車線() in
+forall x ∈ 未来つき障害物集合. (forall y ∈ 自車線.(not(x≈y)) or RAT( (自車線 ∩ 未来つき障害物集合) , 未来つき障害物集合) < 0.01)
+endcase

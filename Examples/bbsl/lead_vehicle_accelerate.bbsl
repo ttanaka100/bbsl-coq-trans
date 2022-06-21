@@ -1,0 +1,27 @@
+exfunction
+//前方車両の存在をチェック, あれば、true を返す
+前方車両がある ():bool
+//前方車両の boundingbox を返す
+前方車両 ():bb
+//加速しなければならない範囲の boundinbox を返す
+加速区間 ():bb
+endexfunction
+
+condition
+[前方車両がある ()]
+endcondition
+
+case 加速
+let 前方車両:bb = 前方車両(), 加速区間:bb = 加速区間() in
+PROJy (前方車両)≈PROJy (加速区間)
+endcase
+
+case 追従
+let 前方車両:bb = 前方車両(), 加速区間:bb = 加速区間() in
+PROJy (前方車両)<PROJy (加速区間)
+endcase
+
+case レスポンス無し
+let 前方車両:bb = 前方車両(), 加速区間:bb = 加速区間() in
+PROJy (前方車両)>PROJy (加速区間)
+endcase

@@ -54,7 +54,7 @@ forall = do
     set <- expr
     dot
     body <- parens expr
-    return (Forall x set body)
+    return (QExpr Forall x set body)
 
 exists :: Parser Expr
 exists = do
@@ -64,7 +64,7 @@ exists = do
     set <- expr
     dot
     body <- parens expr
-    return (Exists x set body)
+    return (QExpr Exists x set body)
 
 bexpr :: Parser Expr
 bexpr = parens expr

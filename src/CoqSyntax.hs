@@ -12,8 +12,7 @@ data TExpr = TVar String Type
            | TVal Double
            | TBExpr BinOp TExpr TExpr Type
            | TUExpr UnOp TExpr Type
-           | TForall String TExpr TExpr
-           | TExists String TExpr TExpr
+           | TQExpr Quant String TExpr TExpr
            | TFunc String [TExpr] FType
            | TRFunc Res [TExpr]
 
@@ -30,8 +29,13 @@ data TSpec = TSpec TSCond [TCase]
 type VEnv = M.Map String Type
 type FEnv = M.Map String FType
 type Env = (VEnv,FEnv)
-data Error = VarError String | TypeError Expr | ArgsError String
-  deriving Show
+data Error = VarError String | ExFuncError String | TypeError Expr | ArgsError String
+
+instance Show Error where
+    show (VarError x)    = ushow x ++ " という変数は宣言されていません"
+    show (ExFuncError f) = ushow f ++ " という外部関数は宣言されていません"
+    show (TypeError e)   = ushow e ++ " 内の型が適切ではありません"
+    show (ArgsError f)   = "関数 " ++ ushow f ++ " の引数の数が適切ではありません"
 
 typeOfRes :: Res -> Type
 typeOfRes PROJx = I
@@ -43,8 +47,7 @@ typeOfTExpr (TVar _ ty)           = ty
 typeOfTExpr (TVal _)              = Q
 typeOfTExpr (TBExpr _ _ _ ty)     = ty
 typeOfTExpr (TUExpr _ _ ty)       = ty
-typeOfTExpr (TForall _ _ _)       = B
-typeOfTExpr (TExists _ _ _)       = B
+typeOfTExpr (TQExpr _ _ _ _)      = B
 typeOfTExpr (TFunc _ _ (FT _ ty)) = ty
 typeOfTExpr (TRFunc r _)          = typeOfRes r
 
@@ -84,30 +87,30 @@ typeBExpr env Or e1 e2 = checkBExpr env Or e1 e2 [((B,B),B)]
 typeUExpr :: Env -> UnOp -> Expr -> Either Error TExpr
 typeUExpr env Not e = checkUExpr env Not e [(B,B)]
 
-typeQExpr :: Env -> (String -> TExpr -> TExpr -> TExpr) -> String -> Expr -> Expr -> Either Error TExpr
+typeQExpr :: Env -> Quant -> String -> Expr -> Expr -> Either Error TExpr
 typeQExpr env@(vEnv,fEnv) q x set body = do
     tset <- typeExpr env set
     let extEnv = (M.insert x BB vEnv, fEnv)
     tbody <- typeExpr extEnv body
     let pty = (typeOfTExpr tset, typeOfTExpr tbody)
-    if pty == (SBB,B) then Right (q x tset tbody) else Left (TypeError (Forall x set body))
+    if pty == (SBB,B) then Right (TQExpr q x tset tbody) else Left (TypeError (QExpr q x set body))
 
-typeRUFunc :: Env -> ([TExpr] -> TExpr) -> Type -> Expr -> Either Error TExpr
-typeRUFunc env con ty e = do
+typeRUFunc :: Env -> Res -> Type -> Expr -> Either Error TExpr
+typeRUFunc env res ty e = do
     te <- typeExpr env e
-    if typeOfTExpr te == ty then Right (con [te]) else Left (TypeError (RFunc W [e]))
+    if typeOfTExpr te == ty then Right (TRFunc res [te]) else Left (TypeError (RFunc res [e]))
 
-typeRBFunc :: Env -> ([TExpr] -> TExpr) -> (Type,Type) -> Expr -> Expr -> Either Error TExpr
-typeRBFunc env con pty e1 e2 = do
+typeRBFunc :: Env -> Res -> (Type,Type) -> Expr -> Expr -> Either Error TExpr
+typeRBFunc env res pty e1 e2 = do
     te1 <- typeExpr env e1
     te2 <- typeExpr env e2
     let (ty1,ty2) = (typeOfTExpr te1, typeOfTExpr te2)
-    if (ty1,ty2) == pty then Right (con [te1,te2]) else Left (TypeError (RFunc RAT [e1,e2]))
+    if (ty1,ty2) == pty then Right (TRFunc res [te1,te2]) else Left (TypeError (RFunc res [e1,e2]))
 
 typeRFunc :: Env -> Res -> [Expr] -> Either Error TExpr
-typeRFunc env RAT [e1,e2] = typeRBFunc env (TRFunc RAT) (SBB,SBB) e1 e2
-typeRFunc env W [e]       = typeRUFunc env (TRFunc W) I e
-typeRFunc env r [e]       = typeRUFunc env (TRFunc r) BB e
+typeRFunc env RAT [e1,e2] = typeRBFunc env RAT (SBB,SBB) e1 e2
+typeRFunc env W [e]       = typeRUFunc env W I e
+typeRFunc env r [e]       = typeRUFunc env r BB e
 typeRFunc _ r _           = Left (ArgsError (show r))
 
 typeExpr :: Env -> Expr -> Either Error TExpr
@@ -117,14 +120,13 @@ typeExpr (vEnv,_) (Var x) = case M.lookup x vEnv of
     _       -> Left (VarError x)
 typeExpr env (BExpr op e1 e2) = typeBExpr env op e1 e2
 typeExpr env (UExpr op e) = typeUExpr env op e
-typeExpr env (Forall x set body) = typeQExpr env TForall x set body
-typeExpr env (Exists x set body) = typeQExpr env TExists x set body
+typeExpr env (QExpr q x set body) = typeQExpr env q x set body
 typeExpr env@(_,fEnv) (Func f es) = case M.lookup f fEnv of
     Just ty@(FT tys _) -> do
         tes <- mapM (typeExpr env) es
         let aTys = [typeOfTExpr te | te <- tes]
         if tys == aTys then Right (TFunc f tes ty) else Left (TypeError (Func f es))
-    _       -> Left (VarError f)
+    _       -> Left (ExFuncError f)
 typeExpr env (RFunc r es) = typeRFunc env r es
 
 envByExFunc :: ExFunc -> FEnv
@@ -197,8 +199,7 @@ instance Show TExpr where
     show (TVal n)    = "EXP_Q " ++ show n
     show (TUExpr op te typ) = showTUExpr op te typ
     show (TBExpr op te1 te2 typ) = showTBExpr op te1 te2 typ
-    show (TForall x set body) = "EXP_forall " ++ ushow x ++ " (" ++ show set ++ ") (" ++ show body ++ ")"
-    show (TExists x set body) = "EXP_exists " ++ ushow x ++ " (" ++ show set ++ ") (" ++ show body ++ ")"
+    show (TQExpr q x set body) = "EXP_" ++ show q ++ " " ++ ushow x ++ " (" ++ show set ++ ") (" ++ show body ++ ")"
     show (TRFunc r tes) = "EXP_" ++ show r ++ intercalate " " ["(" ++ show te ++ ")" | te <- tes]
 
 instance Show TCond where

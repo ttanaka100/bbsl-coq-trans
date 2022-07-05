@@ -9,20 +9,36 @@ data Type = SBB | BB | I | B | Q deriving (Show,Eq)
 data BinOp = Cup | Cap
         | Eq | Gt | Lt | Equiv | Subset | Supset | Subseteq | Supseteq
         | And | Or
-        deriving Show
+
+instance Show BinOp where
+    show Cup      = "∪"
+    show Cap      = "∩"
+    show Eq       = "="
+    show Gt       = ">"
+    show Lt       = "<"
+    show Equiv    = "\8776"
+    show Subset   = "⊂"
+    show Supset   = "⊃"
+    show Subseteq = "⊆"
+    show Supseteq = "⊇"
+    show And      = "and"
+    show Or       = "or"
 
 data UnOp = Not
-        deriving Show
+
+instance Show UnOp where
+    show Not = "not"
 
 data Res = RAT | W
          | PROJx | PROJy | PROJxu | PROJyu | PROJxl | PROJyl
+
+data Quant = Forall | Exists
 
 data Expr = Var String
           | Val Double
           | BExpr BinOp Expr Expr
           | UExpr UnOp Expr
-          | Forall String Expr Expr
-          | Exists String Expr Expr
+          | QExpr Quant String Expr Expr
           | Func String [Expr]
           | RFunc Res [Expr]
 
@@ -50,13 +66,16 @@ instance Show Res where
     show PROJxl = "projxl"
     show PROJyl = "projyl"
 
+instance Show Quant where
+    show Forall = "forall"
+    show Exists = "exists"
+
 instance Show Expr where
     show (Var x) = x
     show (Val n) = show n
     show (BExpr binop e1 e2) = "(" ++ show e1 ++ ") " ++ show binop ++ " (" ++ show e2 ++ ")"
     show (UExpr unop e) = show unop ++ " (" ++ show e ++ ")"
-    show (Forall x set body) = "forall " ++ x ++ " ∈ " ++ show set ++ " (" ++ show body ++ ")"
-    show (Exists x set body) = "exists " ++ x ++ " ∈ " ++ show set ++ " (" ++ show body ++ ")"
+    show (QExpr q x set body) = show q ++ " " ++ x ++ " ∈ " ++ show set ++ " (" ++ show body ++ ")"
     show (Func f es) = f ++ "(" ++ intercalate "," [show e | e <- es] ++ ")"
     show (RFunc r es) = show r ++ "(" ++ intercalate "," [show e | e <- es] ++ ")"
 
